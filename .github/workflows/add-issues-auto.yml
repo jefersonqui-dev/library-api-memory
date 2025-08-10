@@ -1,0 +1,51 @@
+name: Add Issue to User Project
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+jobs:
+  add_issue_to_project:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add issue to Project
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          PROJECT_NUMBER: 8
+          USERNAME: jefersonqui-dev
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+        run: |
+          echo "🔑 Configurando token..."
+          export GH_TOKEN="$GH_TOKEN"
+
+          echo "📌 Obteniendo ID del proyecto..."
+          PROJECT_ID=$(gh api graphql -f query='
+            query($login: String!, $number: Int!) {
+              user(login: $login) {
+                projectV2(number: $number) {
+                  id
+                }
+              }
+            }' -f login=$USERNAME -F number=$PROJECT_NUMBER --jq '.data.user.projectV2.id')
+
+          echo "🐞 Obteniendo ID del issue..."
+          ISSUE_ID=$(gh api graphql -f query='
+            query($url: URI!) {
+              resource(url: $url) {
+                ... on Issue {
+                  id
+                }
+              }
+            }' -f url=$ISSUE_URL --jq '.data.resource.id')
+
+          echo "🚀 Añadiendo issue al proyecto..."
+          gh api graphql -f query='
+            mutation($project:ID!, $issue:ID!) {
+              addProjectV2ItemById(input: {projectId: $project, contentId: $issue}) {
+                item {
+                  id
+                }
+              }
+            }' -f project=$PROJECT_ID -f issue=$ISSUE_ID
+
+          echo "✅ Issue añadido correctamente al proyecto"
