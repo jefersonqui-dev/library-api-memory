@@ -3,6 +3,9 @@ name: Add Issue to User Project
 on:
   issues:
     types: [opened]
+  workflow_dispatch:
+
+    
 
 jobs:
   add_issue_to_project:
