@@ -1,0 +1,75 @@
+name: Add Issue to Project (User or Org)
+
+on:
+  issues:
+    types: [opened]
+  
+
+jobs:
+  add_issue_to_project:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add issue to Project
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          PROJECT_NUMBER: 4
+          LOGIN_NAME: jefersonqui-dev # Usuario u organización
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          IS_ORG: false               # Cambiar a true si es org, o detectar
+        run: |
+          echo "🔑 Configurando token..."
+          export GH_TOKEN="$GH_TOKEN"
+
+          echo "📌 Detectando tipo de propietario..."
+          # Si quieres detección automática según URL del proyecto:
+          if [[ "$LOGIN_NAME" == *"-org" || "$LOGIN_NAME" == *"org"* ]]; then
+            IS_ORG=true
+          fi
+          echo "IS_ORG=$IS_ORG"
+
+          echo "📌 Obteniendo ID del proyecto..."
+          if [ "$IS_ORG" = true ]; then
+            PROJECT_ID=$(gh api graphql -f query='
+              query($login: String!, $number: Int!) {
+                organization(login: $login) {
+                  projectV2(number: $number) {
+                    id
+                  }
+                }
+              }' -f login=$LOGIN_NAME -F number=$PROJECT_NUMBER --jq '.data.organization.projectV2.id')
+          else
+            PROJECT_ID=$(gh api graphql -f query='
+              query($login: String!, $number: Int!) {
+                user(login: $login) {
+                  projectV2(number: $number) {
+                    id
+                  }
+                }
+              }' -f login=$LOGIN_NAME -F number=$PROJECT_NUMBER --jq '.data.user.projectV2.id')
+          fi
+
+          echo "PROJECT_ID: $PROJECT_ID"
+
+          echo "🐞 Obteniendo ID del issue..."
+          ISSUE_ID=$(gh api graphql -f query='
+            query($url: URI!) {
+              resource(url: $url) {
+                ... on Issue {
+                  id
+                }
+              }
+            }' -f url=$ISSUE_URL --jq '.data.resource.id')
+
+          echo "ISSUE_ID: $ISSUE_ID"
+
+          echo "🚀 Añadiendo issue al proyecto..."
+          gh api graphql -f query='
+            mutation($project:ID!, $issue:ID!) {
+              addProjectV2ItemById(input: {projectId: $project, contentId: $issue}) {
+                item {
+                  id
+                }
+              }
+            }' -f project=$PROJECT_ID -f issue=$ISSUE_ID
+
+          echo "✅ Issue añadido correctamente al proyecto"
